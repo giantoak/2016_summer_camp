@@ -5,6 +5,8 @@ Other parsing needed for lattice data?
 ... which will be chosen by Kyle Hundeman
 We'll need to wrangle a bit with cleanup here
 """
+from sys import argv
+
 
 def gz_jsonlines_to_df(fpath):
     import gzip
@@ -18,7 +20,8 @@ def gz_jsonlines_to_df(fpath):
 
     return DataFrame.from_records(jsns)
 
-def main():
+
+def main(path_to_lattice):
     """
 
     :returns: `pandas.DataFrame` ---
@@ -27,18 +30,18 @@ def main():
     import multiprocessing as mp
     import pandas as pd
 
-    ls = glob('/Users/pmlandwehr/wkbnch/memex/memex_ad_features/lattice_data/stripped_before_201605/*.json.gz')
-
+    ls = glob('{}/*.json.gz'.format(path_to_lattice))
     # pool = mp.Pool(10)
     # dfs = p.map(gz_jsonlines_to_df, ls)
     # dfs = pool.map(gz_jsonlines_to_df, ls[0])
     # pool.close()
     # pool.join()
     # df = pd.concat(dfs)
-
     df = gz_jsonlines_to_df(ls[0])
 
     df.to_pickle('lattice_df.pkl')
 
 if __name__ == "__main__":
-    main()
+    if len(argv) != 2:
+        print("Usage: python make_lattice_df.py <path_to_lattice>")
+    main(argv[1])

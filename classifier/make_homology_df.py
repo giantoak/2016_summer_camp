@@ -1,4 +1,6 @@
-def main():
+from sys import argv
+
+def main(path_to_db=None):
     """
     Take the homology DB, pivot the homologies into bools, and return
     :returns `pandas.DataFrame`
@@ -6,7 +8,7 @@ def main():
     from sqlalchemy import create_engine
     import pandas as pd
 
-    ids_to_get = pd.read_pickle('lattice_data.pkl')._id.values().tolist()
+    ids_to_get = pd.read_pickle('lattice_df.pkl')._id.values.tolist()
 
     cdr_ids_str = ','.join(['"{}"'.format(x) for x in ids_to_get])
     query_str = 'select * from cdr_id_to_homology where cdr_id in ({})'.format(cdr_ids_str)
@@ -21,4 +23,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(argv) != 2:
+        print("Usage: python make_homology_df <path_to_db>")
+    main(argv[1])
