@@ -1,27 +1,50 @@
-HOMOLOGY_DB = /Users/pmlandwehr/wkbnch/memex/memex_queries/homology_160722.db
-LATTICE_JSONS = /Users/pmlandwehr/wkbnch/memex/memex_ad_features/lattice_data/stripped_before_201605
+# Local data used to build data frames
+HOMOLOGY_DB = data/initial/homology_160722.db
+LATTICE_JSONS = data/initial/stripped_before_201605
+ID_FILE = data/initial/cdr_ids_to_get.txt
 
-## These targets build merged data sets
 
-giantoak_df.pkl:
+# Targets for building initial data
+data/generated/giantoak_df.pkl: \
+	data/initial/cdr_ids_to_get.txt
 	ipython make_giantoak_df.py
 
-lattice_df.pkl:
+data/generated/lattice_df.pkl: \
+	data/initial/cdr_ids_to_get.txt \
+	LATTICE_JSONS
 	ipython make_lattice_df.py LATTICE_JSONS
 
-homology_df.pkl: lattice_df.pkl
+data/generated/homology_df.pkl: \
+	data/initial/cdr_ids_to_get.txt \
+	HOMOLOGY_DB
 	ipython make_homology_df.py HOMOLOGY_DB
 
-image_df.pkl: lattice_df.pkl
+data/generated/image_df.pkl: \
+	data/initial/cdr_ids_to_get.txt
 	ipython make_image_df.py
 
-merged_df.pkl: lattice_df.pkl image_df.pkl homology_df.pkl
+pre_merge: \
+	data/generated/giantoak_df.pkl \
+	data/generated/lattice_df.pkl \
+	data/generated/homology_df.pkl \
+	data/generated/image_df.pkl \
+
+
+# Targets for merging initial data
+data/generated/merged_df.pkl: \
+	pre_merge
 	ipython make_merged_data.py
 
-merged_phone_df.pkl: merged_df.pkl
+data/generated/merged_phone_df.pkl: \
+	data/generated/merged_df.pkl
 	ipython group_data_by_phone.py
+
+merged: \
+	data/generated/merged_df.pkl \
+	data/generated/merged_phone_df.pkl
 
 
 # Target for bulding a classifier in the notebook
-classifier: data/generated/merged_phone_df.pkl
+classifier: \
+	data/generated/merged_phone_df.pkl
 	runipy -o Classifier.ipynb
