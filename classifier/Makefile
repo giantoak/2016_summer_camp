@@ -21,7 +21,7 @@ merged_df.pkl: lattice_df.pkl image_df.pkl homology_df.pkl
 merged_phone_df.pkl: merged_df.pkl
 	ipython group_data_by_phone.py
 
-## These targets build the classifier
 
-classifier: merged_phone_df.pkl
-	runipy Sixth\ Classifer.ipynb
+# Target for bulding a classifier in the notebook
+classifier: data/generated/merged_phone_df.pkl
+	runipy -o Classifier.ipynb
