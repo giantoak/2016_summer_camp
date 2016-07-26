@@ -30,8 +30,10 @@ def _hbase_row_value(table, row_id, key_id):
 
 
 def main():
-    # df.to_pickle('data/generated/image_df.pkl')
-    pass
+    import pandas as pd
+
+    df = pd.DataFrame({})
+    df.to_pickle('data/generated/image_df.pkl')
 
 if __name__ == "__main__":
     main()
