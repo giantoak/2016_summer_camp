@@ -1,5 +1,6 @@
 from sys import argv
 
+
 def main(path_to_db):
     """
     Take the homology DB, pivot the homologies into bools, and return
@@ -8,14 +9,16 @@ def main(path_to_db):
     from sqlalchemy import create_engine
     import pandas as pd
 
-    ids_to_get = pd.read_pickle('lattice_df.pkl')._id.values.tolist()
+    # Needs patching!
+    ids_to_get = pd.read_pickle(
+        'data/generated/lattice_df.pkl')._id.values.tolist()
 
     cdr_ids_str = ','.join(['"{}"'.format(x) for x in ids_to_get])
-    query_str = 'select * from cdr_id_to_homology where cdr_id in ({})'.format(cdr_ids_str)
+    query_fmt = 'select * from cdr_id_to_homology where cdr_id in ({})'.format
 
     sql_con = create_engine('sqlite:///{}'.format(path_to_db))
 
-    df = pd.read_sql(query_str, sql_con)
+    df = pd.read_sql(query_fmt(cdr_ids_str), sql_con)
 
     df = df.pivot(columns='homology').fillna(False)
 
