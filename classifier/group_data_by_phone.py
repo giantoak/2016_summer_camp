@@ -33,7 +33,8 @@ def main():
     for col in missing_vars:
         df[col] = ~df[col[len('missing_'):]].notnull().astype(int)
 
-    numerical_df = df.groupby('phone')[numerical_vars + missing_vars].describe().unstack()
+    numerical_df = df.groupby(
+        'phone')[numerical_vars + missing_vars].describe().unstack()
     print(numerical_df.shape)
     numerical_df = numerical_df.dropna(0, 'all')
     print(numerical_df.shape)
@@ -43,12 +44,13 @@ def main():
     phone_level_df = phone_level_df.dropna(0, 'all')
     print(phone_level_df.shape)
 
-
-    flag_dummies = dummify_df(df.loc[:, ['phone', 'flag', 'ethnicity']], ['flag', 'ethnicity'], '|')
+    flag_dummies = dummify_df(df.loc[:, ['phone', 'flag', 'ethnicity']],
+                              ['flag', 'ethnicity'],
+                              '|')
     discrete_df = flag_dummies.groupby('phone').mean()
 
-
-    phone_level_df = phone_level_df.join([numerical_df, discrete_df], how='outer')
+    phone_level_df = phone_level_df.join(
+        [numerical_df, discrete_df], how='outer')
     # phone_level_df['has_images'] = df.groupby('phone')['has_images'].max()
     phone_level_df['class'] = df.groupby('phone')['class'].max()
 
@@ -58,7 +60,8 @@ def main():
 
     print(phone_level_df.shape)
 
-    phone_level_df.columns = [x if not isinstance(x, tuple) else ':'.join(x) for x in phone_level_df.columns]
+    phone_level_df.columns = [x if not isinstance(
+        x, tuple) else ':'.join(x) for x in phone_level_df.columns]
 
     phone_level_df.to_pickle('data/generated/phone_level_merged_df.pkl')
 
