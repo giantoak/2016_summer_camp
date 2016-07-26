@@ -39,7 +39,7 @@ def main(path_to_lattice):
     # df = pd.concat(dfs)
     df = gz_jsonlines_to_df(ls[0])
 
-    df.to_pickle('lattice_df.pkl')
+    df.to_pickle('data/generated/lattice_df.pkl')
 
 if __name__ == "__main__":
     if len(argv) != 2:

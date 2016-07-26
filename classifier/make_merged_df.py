@@ -28,12 +28,14 @@ To do
 
 
 def main():
-    df = pd.read_pickle('lattice_df.pkl')
-    df_2 = pd.read_pickle('homology_df.pkl')
+    import pandas as pd
+
+    df = pd.read_pickle('data/generated/lattice_df.pkl')
+    df_2 = pd.read_pickle('data/generated/homology_df.pkl')
     df_3 = df.merge(df_2, left_on='_id', right_on='cdr_id', how='left')
     del df, df_2
 
-    df_3.to_pickle('merged_df.pkl')
+    df_3.to_pickle('data/generated/merged_df.pkl')
 
 
 if __name__ == "__main__":

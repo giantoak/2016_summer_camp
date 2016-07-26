@@ -2,9 +2,11 @@
 This is still stolen from the last QPR! We need to update it.
 """
 
+
 def main():
     from helpers import dummify_df
 
+    df = pd.read_pickle('data/generated/merged_df.pkl')
 
     numerical_vars = ['age',
                       'price',
@@ -21,7 +23,6 @@ def main():
                         'n_incall',
                         'n_incall_and_outcall',
                         'n_cooccurring_phones']
-
 
     missing_vars = ['missing_{}'.format(col) for col in numerical_vars]
 
@@ -59,7 +60,7 @@ def main():
 
     phone_level_df.columns = [x if not isinstance(x, tuple) else ':'.join(x) for x in phone_level_df.columns]
 
-    phone_level_df.to_pickle('../../data/merged/data_to_use_by_phone_v4.pkl')
+    phone_level_df.to_pickle('data/generated/phone_level_merged_df.pkl')
 
 if __name__ == "__main__":
     pass

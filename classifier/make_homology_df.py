@@ -1,6 +1,6 @@
 from sys import argv
 
-def main(path_to_db=None):
+def main(path_to_db):
     """
     Take the homology DB, pivot the homologies into bools, and return
     :returns `pandas.DataFrame`
@@ -13,13 +13,13 @@ def main(path_to_db=None):
     cdr_ids_str = ','.join(['"{}"'.format(x) for x in ids_to_get])
     query_str = 'select * from cdr_id_to_homology where cdr_id in ({})'.format(cdr_ids_str)
 
-    sql_con = create_engine('sqlite:///homology_160722.db')
+    sql_con = create_engine('sqlite:///{}'.format(path_to_db))
 
     df = pd.read_sql(query_str, sql_con)
 
     df = df.pivot(columns='homology').fillna(False)
 
-    df.to_pickle('homology_data.pkl')
+    df.to_pickle('data/generated/homology_df.pkl')
 
 
 if __name__ == "__main__":
