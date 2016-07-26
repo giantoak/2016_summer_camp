@@ -35,8 +35,7 @@ def main():
 
     pkls_to_merge = ['giantoak_df.pkl'
                      'homology_df.pkl',
-                     'image_df.pkl',
-                     'author_df.pkl']
+                     'image_df.pkl']
 
     pbar = tqdm(pkls_to_merge)
     for pkl_df in pbar:

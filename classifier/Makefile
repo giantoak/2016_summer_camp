@@ -23,16 +23,11 @@ data/generated/image_df.pkl: \
 	ID_FILE
 	ipython make_image_df.py
 
-data/generated/author_df.pkl: \
-	ID_FILE
-	ipython make_author_df.py
-
 pre_merge: \
 	data/generated/lattice_df.pkl \
 	data/generated/homology_df.pkl \
 	data/generated/giantoak_df.pkl \
 	data/generated/image_df.pkl \
-	data/generated/author_df.pkl
 
 
 # Targets for merging initial data
