@@ -5,7 +5,7 @@ Other parsing needed for lattice data?
 ... which will be chosen by Kyle Hundeman
 We'll need to wrangle a bit with cleanup here
 """
-from sys import argv
+import sys
 
 
 def gz_jsonlines_to_df(fpath):
@@ -34,6 +34,19 @@ def main(path_to_cdr_ids, path_to_lattice):
 
     cdr_ids_to_get = set(open(path_to_cdr_ids).readlines())
 
+    def gz_jsonlines_to_df(fpath):
+        import gzip
+        import ujson as json
+        from pandas import DataFrame
+        jsns = []
+        for line in gzip.open(fpath):
+            jsn = json.loads(line)
+            if jsn['_']
+            # Checks/Transforms can occur here to see if we want to keep the data
+            jsns.append(jsn)
+
+        return DataFrame.from_records(jsns)
+
     ls = glob('{}/*.json.gz'.format(path_to_lattice))
     # pool = mp.Pool(10)
     # dfs = p.map(gz_jsonlines_to_df, ls)
@@ -48,4 +61,5 @@ def main(path_to_cdr_ids, path_to_lattice):
 if __name__ == "__main__":
     if len(argv) != 3:
         print("Usage: python make_lattice_df.py <path_to_cdr_ids> <path_to_lattice>")
-    main(argv[1], argv[2])
+        sys.exit()
+    main(sys.argv[1], sys.argv[2])

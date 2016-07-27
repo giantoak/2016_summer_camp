@@ -1,11 +1,10 @@
-from sys import argv
-
 """
 * Get CDR image ids for images used in ads
 * Get similar CDR IDs in common set
 * Generate cluster DF
 * return
 """
+import sys
 
 HBASE_ADDR = 'memex-hbase-master:8080'
 
@@ -44,6 +43,7 @@ def main(path_to_cdr_ids):
     df.to_pickle('data/generated/image_df.pkl')
 
 if __name__ == "__main__":
-    if len(argv) != 2:
+    if len(sys.argv) != 2:
         print("Usage: python make_image_df.py <path_to_cdr_ids>")
-    main(argv[1])
+        sys.exit()
+    main(sys.argv[1])
