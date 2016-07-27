@@ -1,6 +1,7 @@
 """
 Reads Giant Oak data produced by Jeff / Gabriel
 """
+from sys import argv
 
 def main(path_to_cdr_ids):
     """
@@ -19,5 +20,4 @@ def main(path_to_cdr_ids):
 if __name__ == "__main__":
     if len(argv) != 2:
         print("Usage: python make_giantoak_df.py <path_to_cdr_ids>")
-        return
-    main()
+    main(argv[1])

@@ -48,5 +48,4 @@ def main(path_to_cdr_ids, path_to_lattice):
 if __name__ == "__main__":
     if len(argv) != 3:
         print("Usage: python make_lattice_df.py <path_to_cdr_ids> <path_to_lattice>")
-        return
     main(argv[1], argv[2])

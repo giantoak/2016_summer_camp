@@ -46,5 +46,4 @@ def main(path_to_cdr_ids):
 if __name__ == "__main__":
     if len(argv) != 2:
         print("Usage: python make_image_df.py <path_to_cdr_ids>")
-        return
-    main()
+    main(argv[1])

@@ -9,14 +9,10 @@ data/generated/giantoak_df.pkl: \
 	$(ID_FILE)
 	ipython make_giantoak_df.py $(ID_FILE)
 
-data/generated/lattice_df.pkl: \
-	$(ID_FILE) \
-	$(LATTICE_JSONS)
+data/generated/lattice_df.pkl: $(ID_FILE) make_lattice_df.py
 	ipython make_lattice_df.py $(ID_FILE) $(LATTICE_JSONS)
 
-data/generated/homology_df.pkl: \
-	$(ID_FILE) \
-	HOMOLOGY_DB
+data/generated/homology_df.pkl: $(ID_FILE) $(HOMOLOGY_DB)
 	ipython make_homology_df.py $(ID_FILE) $(HOMOLOGY_DB)
 
 data/generated/image_df.pkl: \
@@ -33,7 +29,7 @@ pre_merge: \
 # Targets for merging initial data
 data/generated/merged_df.pkl: \
 	pre_merge
-	ipython make_merged_data.py
+	ipython make_merged_df.py
 
 data/generated/merged_phone_df.pkl: \
 	data/generated/merged_df.pkl

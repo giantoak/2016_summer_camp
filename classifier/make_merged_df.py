@@ -37,7 +37,7 @@ def main():
 
     df = pd.read_pickle('data/generated/lattice_df.pkl')
 
-    pkls_to_merge = ['giantoak_df.pkl'
+    pkls_to_merge = ['giantoak_df.pkl',
                      'homology_df.pkl',
                      'image_df.pkl']
 
@@ -45,10 +45,11 @@ def main():
     for pkl_df in pbar:
         pbar.set_description(pkl_df)
         tmp_df = pd.read_pickle('data/generated/{}'.format(pkl_df))
-        df = pd.merge(df,
-                      left_on='_id',
-                      right_on='cdr_id',
-                      how='left')
+        if len(tmp_df):
+            df = df.merge(tmp_df,
+                          left_on='_id',
+                          right_on='cdr_id',
+                          how='left')
         del tmp_df
 
     df.to_pickle('data/generated/merged_df.pkl')
