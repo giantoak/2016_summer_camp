@@ -11,7 +11,7 @@ data/generated/giantoak_df.pkl: \
 
 data/generated/lattice_df.pkl: \
 	$(ID_FILE) \
-	LATTICE_JSONS
+	$(LATTICE_JSONS)
 	ipython make_lattice_df.py $(ID_FILE) $(LATTICE_JSONS)
 
 data/generated/homology_df.pkl: \
