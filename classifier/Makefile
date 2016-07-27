@@ -3,6 +3,20 @@ HOMOLOGY_DB = data/initial/homology_160722.db
 LATTICE_JSONS = data/initial/stripped_before_201605
 ID_FILE = data/initial/cdr_ids_to_get.txt
 
+# Target for setting up data/initial
+setup:
+	mkdir data
+	mkdir data/generated
+	mkdir data/initial
+	mkdir data/initial/stripped_before_201605
+
+	aws s3 cp s3://giantoak.memex/2016_summer_camp/cr_ids_to_get.txt data/initial
+	aws s3 cp s3://giantoak.memex/2016_summer_camp/homology_160722.db.gz data/initial
+	cd data/initial
+	gunzip homology_160722.db.gz
+	cd ../..
+
+	aws s3 cp --recursive s3://giantoak.memex/2016_summer_camp/stripped_before_201605/ data/initial/stripped_before_201605
 
 # Targets for building initial data
 data/generated/giantoak_df.pkl: \
