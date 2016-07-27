@@ -21,14 +21,18 @@ def gz_jsonlines_to_df(fpath):
     return DataFrame.from_records(jsns)
 
 
-def main(path_to_lattice):
+def main(path_to_cdr_ids, path_to_lattice):
     """
 
-    :returns: `pandas.DataFrame` ---
+    :param str path_to_cdr_ids:
+    :param str path_to_lattice:
+    :returns: `None` -- saves pickled `pandas.DataFrame` to disk
     """
     from glob import glob
     import multiprocessing as mp
     import pandas as pd
+
+    cdr_ids_to_get = set(open(path_to_cdr_ids).readlines())
 
     ls = glob('{}/*.json.gz'.format(path_to_lattice))
     # pool = mp.Pool(10)
@@ -42,6 +46,7 @@ def main(path_to_lattice):
     df.to_pickle('data/generated/lattice_df.pkl')
 
 if __name__ == "__main__":
-    if len(argv) != 2:
-        print("Usage: python make_lattice_df.py <path_to_lattice>")
-    main(argv[1])
+    if len(argv) != 3:
+        print("Usage: python make_lattice_df.py <path_to_cdr_ids> <path_to_lattice>")
+        return
+    main(argv[1], argv[2])

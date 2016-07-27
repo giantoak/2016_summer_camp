@@ -28,6 +28,10 @@ To do
 
 
 def main():
+    """
+
+    :returns: `None` -- saves pickled `pandas.DataFrame` to disk
+    """
     import pandas as pd
     from tqdm import tqdm
 

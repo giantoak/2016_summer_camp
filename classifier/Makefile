@@ -7,21 +7,21 @@ ID_FILE = data/initial/cdr_ids_to_get.txt
 # Targets for building initial data
 data/generated/giantoak_df.pkl: \
 	ID_FILE
-	ipython make_giantoak_df.py
+	ipython make_giantoak_df.py ID_FILE
 
 data/generated/lattice_df.pkl: \
 	ID_FILE \
 	LATTICE_JSONS
-	ipython make_lattice_df.py LATTICE_JSONS
+	ipython make_lattice_df.py ID_FILE LATTICE_JSONS
 
 data/generated/homology_df.pkl: \
 	ID_FILE \
 	HOMOLOGY_DB
-	ipython make_homology_df.py HOMOLOGY_DB
+	ipython make_homology_df.py ID_FILE HOMOLOGY_DB
 
 data/generated/image_df.pkl: \
 	ID_FILE
-	ipython make_image_df.py
+	ipython make_image_df.py ID_FILE
 
 pre_merge: \
 	data/generated/lattice_df.pkl \
