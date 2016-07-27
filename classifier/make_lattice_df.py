@@ -34,6 +34,19 @@ def main(path_to_cdr_ids, path_to_lattice):
 
     cdr_ids_to_get = set(open(path_to_cdr_ids).readlines())
 
+    def gz_jsonlines_to_df(fpath):
+        import gzip
+        import ujson as json
+        from pandas import DataFrame
+        jsns = []
+        for line in gzip.open(fpath):
+            jsn = json.loads(line)
+            if jsn['_']
+            # Checks/Transforms can occur here to see if we want to keep the data
+            jsns.append(jsn)
+
+        return DataFrame.from_records(jsns)
+
     ls = glob('{}/*.json.gz'.format(path_to_lattice))
     # pool = mp.Pool(10)
     # dfs = p.map(gz_jsonlines_to_df, ls)
