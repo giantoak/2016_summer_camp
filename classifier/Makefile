@@ -23,8 +23,10 @@ pre_merge: \
 	data/generated/lattice_df.pkl \
 	data/generated/homology_df.pkl \
 	data/generated/giantoak_df.pkl \
-	data/generated/image_df.pkl \
+	data/generated/image_df.pkl 
 
+data/generated/negative_sample.csv: sample_cdr_ids.py
+	ipython sample_cdr_ids.py
 
 # Targets for merging initial data
 data/generated/merged_df.pkl: \
