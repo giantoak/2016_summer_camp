@@ -1,4 +1,4 @@
-from sys import argv
+import sys
 
 
 def main(path_to_cdr_ids, path_to_db):
@@ -6,7 +6,7 @@ def main(path_to_cdr_ids, path_to_db):
     Take the homology DB, pivot the homologies into bools, and return
     :param sr path_to_cdr_ids:
     :param str path_to_db:
-    :returns `pandas.DataFrame`
+    :returns: `None` -- saves pickled `pandas.DataFrame` to disk
     """
     from sqlalchemy import create_engine
     import pandas as pd
@@ -28,4 +28,5 @@ def main(path_to_cdr_ids, path_to_db):
 if __name__ == "__main__":
     if len(argv) != 3:
         print("Usage: python make_homology_df <path_to_db> <path_to_cdr_ids")
-    main(argv[1], argv[2])
+        sys.exit()
+    main(sys.argv[1], sys.argv[2])

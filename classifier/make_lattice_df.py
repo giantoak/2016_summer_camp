@@ -5,7 +5,7 @@ Other parsing needed for lattice data?
 ... which will be chosen by Kyle Hundeman
 We'll need to wrangle a bit with cleanup here
 """
-from sys import argv
+import sys
 
 
 def gz_jsonlines_to_df(fpath):
@@ -48,5 +48,5 @@ def main(path_to_cdr_ids, path_to_lattice):
 if __name__ == "__main__":
     if len(argv) != 3:
         print("Usage: python make_lattice_df.py <path_to_cdr_ids> <path_to_lattice>")
-        return
-    main(argv[1], argv[2])
+        sys.exit()
+    main(sys.argv[1], sys.argv[2])
