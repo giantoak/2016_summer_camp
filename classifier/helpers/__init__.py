@@ -77,7 +77,21 @@ def disaggregated_df(df, aggregate_col, sep):
     new_df = pd.concat([good_slice, pd.DataFrame.from_records(rows, columns=df.columns)]).drop_duplicates()
     new_df.reset_index(inplace=True, drop=True)
     return new_df
-
+def draw_folds_by_variable(df, variable='case_id',num_folds=5, random_state=0):
+    variable_values = df[variable].value_counts().index
+    if random_state:
+        np.random.seed(random_state)
+    out = [] # initialize empty output list, which will be (index, (test, train)) for each of num_folds
+    i = 0
+    for train, test in KFold(len(variable_values), num_folds, random_state=random_state, shuffle=True):
+        out.append((i,
+                (
+                    df.index[df[variable].isin(variable_values[train])],
+                    df.index[df[variable].isin(variable_values[test])]
+                )
+            ))
+        i+=1
+    return(out)
 
 def aggregated_df(df, disaggregated_col, key_cols, sep):
     """
