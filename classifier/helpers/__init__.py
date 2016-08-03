@@ -1,3 +1,18 @@
+import pandas
+from itertools import chain
+import pandas as pd
+import numpy as np
+import ipdb
+from sklearn.cross_validation import StratifiedKFold 
+def fit_model(df, y_series, col_names, rf, num_folds):
+    X_df = df.loc[:, col_names]
+    X_df=X_df.fillna(0)
+    print(X_df.shape)
+    rf_metrics = all_scoring_metrics(rf, X_df, y_series, StratifiedKFold(y_series, num_folds))
+
+    metrics_no_price = pandas.DataFrame({'rf':rf_metrics.mean().values}, index=rf_metrics.mean().keys())
+    return(metrics_no_price)
+    #return(metrics_no_price.loc[['f1','roc_auc','true_negative_rate','true_positive_rate','fpr_at_50tpr','fpr_at_10tpr']])
 def df_of_tables_for_dd_ids(dd_ids, sqlite_tables, sql_con):
     """
     :param list dd_ids: list of Deep Dive IDs to retrieve
@@ -7,8 +22,6 @@ def df_of_tables_for_dd_ids(dd_ids, sqlite_tables, sql_con):
     :returns: `pandas.DataFrame` -- dataframe of tables, joined using the Deep \
     Dive IDs.
     """
-    import pandas as pd
-    import numpy as np
 
     dd_ids_str = ','.join(['"{}"'.format(x) for x in dd_ids])
     query_fmt = 'select * from {} where dd_id in ({})'.format
@@ -59,8 +72,6 @@ def disaggregated_df(df, aggregate_col, sep):
     :param str sep:
     :returns: `pandas.DataFrame` --
     """
-    from itertools import chain
-    import pandas as pd
 
     good_slice = df.ix[df[aggregate_col].apply(lambda x: x.find(sep) == -1)]
     bad_slice = df.ix[df[aggregate_col].apply(lambda x: x.find(sep) > -1)]
@@ -347,6 +358,8 @@ def all_scoring_metrics(clf, X_df, y_series, stratified_kfold):
     from pandas import DataFrame
     from sklearn.metrics import auc
     from sklearn.metrics import roc_curve
+    from sklearn.metrics import average_precision_score
+    from sklearn.metrics import precision_score
     
     out = []
     mean_tpr = 0.0
@@ -371,5 +384,14 @@ def all_scoring_metrics(clf, X_df, y_series, stratified_kfold):
         output_features['roc_thresholds'] = roc_curve(y_test, probas_[:, 1])
         output_features['roc_auc'] = auc(output_features['roc_fpr'],
                                          output_features['roc_tpr'])
+        output_features['fpr_at_50tpr'] = output_features['roc_fpr'][(output_features['roc_tpr'] < .5).sum()]
+        output_features['fpr_at_10tpr'] = output_features['roc_fpr'][(output_features['roc_tpr'] < .1).sum()]
+        output_features['fpr_at_lowest_tpr'] = output_features['roc_fpr'][-( output_features['roc_tpr'] > 0).sum()]
+        output_features['tpr_at_lowest_tpr'] = output_features['roc_tpr'][-( output_features['roc_tpr'] > 0).sum()]
+        output_features['average_precision_score'] = average_precision_score(y_test, probas_[:,1])
+        for i in np.arange(.05, .95, .05):
+            output_features['precision_prob_' + ('%0.2f' % i).replace('0.','')] = precision_score(y_test, probas_[:,1] > i)
+            output_features['true_positive_rate_' + ('%0.2f' % i).replace('0.','')] = ((y_test) &  (probas_[:,1] > i)).sum() / float(y_test.sum())
+            output_features['false_positive_rate_' + ('%0.2f' % i).replace('0.','')] = ((~y_test) &  (probas_[:,1] > i)).sum() / float((~y_test).sum())
         out.append(output_features)
     return DataFrame(out)
