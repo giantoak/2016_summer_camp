@@ -93,6 +93,7 @@ ages  = ['no_age','measured_age','imputed_age']
 prices = ['no_price','measured_price','imputed_price']
 texts = ['no_text', 'text']
 model_result_list = []
+ipdb.set_trace()
 for a in ages:
     cols = set(df.columns) - set(['true'])
     if a== 'no_age':
@@ -125,6 +126,11 @@ for a in ages:
             model_result_list.append({name:fit_model(df, y_series, model_cols, rf, num_folds=num_folds)})
 
 
+
+# Write final output model with everything
+rf_fit = rf.fit(df.fillna(0), y_series)
+pickle.dump(rf_fit, open('rf_all_features.pkl','wb'))  
+df.to_csv('X_model_data.csv')
 
 out = pandas.DataFrame([i.values()[0].to_dict()['rf'] for i in model_result_list], index = [i.keys()[0] for i in model_result_list])
 out.to_csv('classifier_results.csv')
@@ -206,6 +212,7 @@ columns={
 
 out_df = out.loc[row_order,column_order]
 out_df = out_df.rename(columns=columns, index=rows)
+out_df.to_latex('classifier_results.tex', formatters=[lambda x: '%0.3f' % x, lambda x: '%0.3f' % x, lambda x: '%0.3f' % x])
 
 ipdb.set_trace()
 
