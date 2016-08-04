@@ -68,9 +68,9 @@ age_cols = {x for x in df.columns if x.find('age__') > -1}
 age_imputed_cols = {x for x in df.columns if x.find('age_imputed__') > -1}
 duration_cols = {x for x in df.columns if x.find('duration') > -1}
 flag_cols = {x for x in df.columns if x.find('flag_') > -1}
-ethnicity_cols = {x for x in df.columns if x.find('ethnicity_') > -1}
+ethnicity_cols = {x for x in df.columns if x.find('ethnicity') > -1}
 image_cols = {x for x in df.columns if x.find('image') > -1}
-age_cols = {x for x in df.columns if x.find('age') > -1} | set(['flag_Juvenile'])
+#age_cols = {x for x in df.columns if x.find('age') > -1} | set(['flag_Juvenile'])
 #service_cols = set(['n_incall', 'n_outcall', 'n_incall_and_outcall'])
 
 
@@ -89,11 +89,20 @@ rf = RandomForestClassifier(oob_score=True,
                             n_jobs=-1,
                             class_weight="balanced")
 
+# Write final output model with everything
+y_series = df['true']
+cols = set(df.columns) - set(['true'])
+final_columns = cols - set(price_cols) - set(age_cols) - set(ethnicity_cols)
+df_sub = df.copy()
+df_sub = df_sub[sorted(final_columns)]
+rf_fit = rf.fit(df_sub.fillna(0), y_series)
+pickle.dump(rf_fit, open('rf_all_features_text.pkl','wb'))  
+df_sub.to_csv('X_model_data_text.csv')
+
 ages  = ['no_age','measured_age','imputed_age']
 prices = ['no_price','measured_price','imputed_price']
 texts = ['no_text', 'text']
 model_result_list = []
-ipdb.set_trace()
 for a in ages:
     cols = set(df.columns) - set(['true'])
     if a== 'no_age':
@@ -126,11 +135,6 @@ for a in ages:
             model_result_list.append({name:fit_model(df, y_series, model_cols, rf, num_folds=num_folds)})
 
 
-
-# Write final output model with everything
-rf_fit = rf.fit(df.fillna(0), y_series)
-pickle.dump(rf_fit, open('rf_all_features.pkl','wb'))  
-df.to_csv('X_model_data.csv')
 
 out = pandas.DataFrame([i.values()[0].to_dict()['rf'] for i in model_result_list], index = [i.keys()[0] for i in model_result_list])
 out.to_csv('classifier_results.csv')
@@ -191,6 +195,7 @@ row_order= [
         'measured_age__imputed_price__no_text',
         'measured_age__imputed_price__text',
         'measured_age__no_price__text',
+        'imputed_age__imputed_price__text',
         ]
 column_order=[
         'roc_auc',
@@ -203,6 +208,7 @@ rows={
         'measured_age__imputed_price__no_text':'With Imputed Price',
         'measured_age__imputed_price__text':'With Imputed Price and Text',
         'measured_age__no_price__text':'Text, no Price',
+        'imputed_age__imputed_price__text':'Imputed Price, Imputed Age, Text',
         }
 columns={
         'roc_auc':'ROC AUC',

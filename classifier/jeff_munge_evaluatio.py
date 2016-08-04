@@ -102,11 +102,12 @@ cluster_column = 'phone_1'
 # Begin work featurizing text:w
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
-tfidf = TfidfVectorizer(ngram_range=(1,2))
+tfidf = cPickle.load(open('tfidf_vectorizer.pkl','wb'))
+tsvd = cPickle.load(open('svd_text.pkl','wb'))
 ad_text = tfidf.fit_transform(out['text'])
-tsvd=TruncatedSVD(n_components=150)
 X_text_sub=tsvd.fit_transform(ad_text)
 X_text_sub = pandas.DataFrame(X_text_sub, columns = ['text_feature__' + str(i) for i in range(X_text_sub.shape[1])])
+ipdb.set_trace()
 cPickle.dump(X_text_sub,open('svd_text.pkl','wb'))
 phone_text=pandas.concat([out[cluster_column], X_text_sub], axis=1)
 if phone_text.shape[0] != out.shape[0]:
@@ -149,8 +150,18 @@ score_output = out[['cdr_id','phone_1']].merge(scores, left_on='phone_1',right_i
 print(out.shape)
 print(score_output.shape)
 score_output=score_output.merge(cdr_ids_to_cluster_ids, left_on='cdr_id', right_on='doc_id')
+score_output_backup = score_output.copy()
 print(score_output.shape)
 score_output[['cluster_id','score']].tolist()
-with open('evaluation_scores.json','w') as f:
-    for line in json.loads(score_output[['cluster_id','score']].T.to_json()).values():
+true_positive_ids = =set([i['cluster_id'] for i in true_positives])   
+missing_ids = true_positive_ids - set(score_output['cluster_id'])
+missing_scores = pandas.DataFrame([{'cluster_id':i, 'score':0.5} for i in missing_ids])
+score_output = pandas.concat([missing_scores, score_output])
+score_output_mean = score_output.groupby('cluster_id')['score'].mean().reset_index()
+score_output_max = score_output.groupby('cluster_id')['score'].max().reset_index()
+with open('evaluation_scores_mean.jl','w') as f:
+    for line in json.loads(score_output_mean[['cluster_id','score']].T.to_json()).values():
+        f.write(ujson.dumps(line) + '\n')
+with open('evaluation_scores_max.jl','w') as f:
+    for line in json.loads(score_output_max[['cluster_id','score']].T.to_json()).values():
         f.write(ujson.dumps(line) + '\n')

@@ -18,6 +18,7 @@ eng=sqlalchemy.create_engine('sqlite:////home/ubuntu/2016_summer_camp/classifier
 #df.to_csv('dr_id_to_cdr_id.csv', index=False)
 #true_positives = pandas.read_csv('data/initial/true_positives_text.psv', sep='|')
 true_positives = [ujson.loads(i) for i in open('/home/ubuntu/memex_ad_features/true_positives_text.json').readlines()]
+ipdb.set_trace()
 true_cdr_ids = set([i['doc_id'] for i in true_positives])
 true_negatives = pandas.read_csv('/home/ubuntu/memex_ad_features/negative_sample.csv') 
 false_cdr_ids = set(true_negatives['cdr_id'].tolist())
@@ -100,11 +101,20 @@ out.to_csv('classifier_in.csv', sep='\t', encoding='utf-8', index=False)
 # Begin work featurizing text:w
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
-tfidf = TfidfVectorizer(ngram_range=(1,2))
-ad_text = tfidf.fit_transform(out['text'])
-tsvd=TruncatedSVD(n_components=150)
-X_text_sub=tsvd.fit_transform(ad_text)
-X_text_sub = pandas.DataFrame(X_text_sub, columns = ['text_feature__' + str(i) for i in range(X_text_sub.shape[1])])
+if True:
+    tfidf = TfidfVectorizer(ngram_range=(1,2))
+    ad_text = tfidf.fit_transform(out['text'])
+    tsvd=TruncatedSVD(n_components=150)
+    X_text_sub=tsvd.fit_transform(ad_text)
+    X_text_sub = pandas.DataFrame(X_text_sub, columns = ['text_feature__' + str(i) for i in range(X_text_sub.shape[1])])
+    cPickle.dump(tsvd, open('svd_transform.pkl','wb'))
+    cPickle.dump(tfidf, open('tfidf_vectorizer.pkl','wb'))
+else:
+    tfidf = cPickle.load(open('tfidf_vectorizer.pkl','wb'))
+    tsvd = cPickle.load(open('svd_transform.pkl','wb'))
+    ad_text = tfidf.fit_transform(out['text'])
+    X_text_sub=tsvd.fit_transform(ad_text)
+    X_text_sub = pandas.DataFrame(X_text_sub, columns = ['text_feature__' + str(i) for i in range(X_text_sub.shape[1])])
 cPickle.dump(X_text_sub,open('svd_text.pkl','wb'))
 phone_text=pandas.concat([out['phone_1'], X_text_sub], axis=1)
 if phone_text.shape[0] != out.shape[0]:
