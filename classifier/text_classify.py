@@ -3,6 +3,7 @@ import cPickle
 import pickle
 import json
 from helpers import fit_model
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 df = pandas.read_csv('evaluation_text_features.csv', index_col=['cluster_id'])
 
@@ -59,7 +60,7 @@ for a in ages:
             print(len(cols))
             model_result_list.append({name:fit_model(df, y_series, model_cols, rf, num_folds=num_folds)})
 
-all_cols = sorted(set(df.columns) - set(['group']) - set(text_cols))
+all_cols = sorted(set(df.columns) - set(['group']) - set(price_imputed_cols) - set(age_imputed_cols))
 rf_all = rf.fit(df[all_cols].fillna(0), y_series)
 
 cPickle.dump(rf_all, open('text_only_model.pkl','wb'))
@@ -112,12 +113,12 @@ columns={
 
 out_df = out.loc[row_order,column_order]
 out_df = out_df.rename(columns=columns, index=rows)
-out_df.to_latex('classifier_results_text.tex', formatters=[lambda x: '%0.3f' % x, lambda x: '%0.3f' % x, lambda x: '%0.3f' % x])
+out_df.to_latex('classifier_results_text_only.tex', formatters=[lambda x: '%0.3f' % x, lambda x: '%0.3f' % x, lambda x: '%0.3f' % x])
 
 # Begin scoring
 eval_probs=rf_all.predict_proba(df_eval[all_cols].fillna(0))[:,1]
 s=pandas.DataFrame({'score':eval_probs, 'cluster_id':df_eval.index})
-with open('evaluation_scores_imputations_only.jl','w') as f:
+with open('evaluation_scores_text_only.jl','w') as f:
     for line in json.loads(s[['cluster_id','score']].T.to_json()).values():
         f.write(ujson.dumps(line) + '\n')
 

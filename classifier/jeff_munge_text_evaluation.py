@@ -15,33 +15,33 @@ from sklearn.ensemble import RandomForestRegressor
 
 true_positives = [ujson.loads(i) for i in open('/home/ubuntu/memex_ad_features/true_positives_text.json').readlines()]
 true_cdr_ids = set([i['doc_id'] for i in true_positives])
-eng=sqlalchemy.create_engine('sqlite:////home/ubuntu/2016_summer_camp/classifier/data/dd_dump_v2.db')
-#df=pandas.read_sql('select * from dd_id_to_cdr_id;', eng)
-#df.to_csv('dr_id_to_cdr_id.csv', index=False)
-#true_positives = pandas.read_csv('data/initial/true_positives_text.psv', sep='|')
+#eng=sqlalchemy.create_engine('sqlite:////home/ubuntu/2016_summer_camp/classifier/data/dd_dump_v2.db')
+##df=pandas.read_sql('select * from dd_id_to_cdr_id;', eng)
+##df.to_csv('dr_id_to_cdr_id.csv', index=False)
+##true_positives = pandas.read_csv('data/initial/true_positives_text.psv', sep='|')
 
-true_negatives = pandas.read_csv('/home/ubuntu/memex_ad_features/negative_sample.csv') 
-false_cdr_ids = set(true_negatives['cdr_id'].tolist())
-all_cdr_ids = true_cdr_ids.union(false_cdr_ids)
-df = pandas.read_csv('dd_id_to_cdr_id.csv')
-true_cdr_mapping=df[df['cdr_id'].isin(all_cdr_ids)]
-true_cdr_mapping['true'] = true_cdr_mapping['cdr_id'].isin(true_cdr_ids)
-true_cdr_mapping.to_csv('classifier_all_ids.csv', index=False)
-all_dd_ids = set(true_cdr_mapping['dd_id'].tolist())
-true_dd_ids = set(true_cdr_mapping[true_cdr_mapping['true']]['dd_id'])
+#true_negatives = pandas.read_csv('/home/ubuntu/memex_ad_features/negative_sample.csv') 
+#false_cdr_ids = set(true_negatives['cdr_id'].tolist())
+#all_cdr_ids = true_cdr_ids.union(false_cdr_ids)
+#df = pandas.read_csv('dd_id_to_cdr_id.csv')
+#true_cdr_mapping=df[df['cdr_id'].isin(all_cdr_ids)]
+#true_cdr_mapping['true'] = true_cdr_mapping['cdr_id'].isin(true_cdr_ids)
+#true_cdr_mapping.to_csv('classifier_all_ids.csv', index=False)
+#all_dd_ids = set(true_cdr_mapping['dd_id'].tolist())
+#true_dd_ids = set(true_cdr_mapping[true_cdr_mapping['true']]['dd_id'])
 
-if False:
-    print('Filtering dd content')
-    study_content= []
-    with open('/home/ubuntu/memexHack1/data/escort_cdr_2/content.tsv') as f:
-        for line in f:
-            dd_id_str, site, typ, url, text, content = line.split('\t')
-            if int(dd_id_str) in all_dd_ids:
-                study_content.append(line.strip())
+#if False:
+    #print('Filtering dd content')
+    #study_content= []
+    #with open('/home/ubuntu/memexHack1/data/escort_cdr_2/content.tsv') as f:
+        #for line in f:
+            #dd_id_str, site, typ, url, text, content = line.split('\t')
+            #if int(dd_id_str) in all_dd_ids:
+                #study_content.append(line.strip())
 
-    with open('study_content_text_only.tsv','w') as f:
-        for i in study_content:
-            f.write(i + '\n')
+    #with open('study_content_text_only.tsv','w') as f:
+        #for i in study_content:
+            #f.write(i + '\n')
 
 training_content = pandas.read_csv('study_content_text_only.tsv','\t', header=None, names=['dd_id','site','type','url','text','content'])
 phones = pandas.read_csv('/home/ubuntu/memexHack1/data/escort_cdr_2/phones-combined.tsv', sep='\t', names=['dd_id','phone'])

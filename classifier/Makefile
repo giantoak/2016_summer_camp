@@ -7,6 +7,8 @@ ID_FILE = data/initial/cdr_ids_to_get.txt
 setup:
 	mkdir data
 	mkdir data/generated
+	mkdir data/classifier
+	mkdir data/classifier/work/
 	mkdir data/initial
 	mkdir data/initial/stripped_before_201605
 
@@ -18,6 +20,10 @@ setup:
 
 	aws s3 cp --recursive s3://giantoak.memex/2016_summer_camp/stripped_before_201605/ data/initial/stripped_before_201605
 
+data/initial/CP1_train_ads.json:
+	aws s3 cp s3://giantoakmemex/CP1_train_ads.json data/initial/
+data/classifier/work/true_positives_text.json: parse_cp.py data/initial/CP1_train_ads.json
+	python parse_cp.py
 # Targets for building initial data
 data/generated/giantoak_df.pkl: \
 	$(ID_FILE)
