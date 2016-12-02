@@ -1,0 +1,300 @@
+import pandas
+import json
+import ipdb
+import cPickle
+import numpy as np
+from sklearn.cross_validation import StratifiedKFold, KFold
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import precision_score
+from sklearn.metrics import recall_score
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import FeatureUnion
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+#model_df = pandas.read_csv('model_fit.csv', index_col='phone_1')
+model_df = pandas.read_csv('qpr_imputation.csv', dtype={'phone_1':'str'})
+
+cluster_id = 'cluster_id'
+def draw_folds_by_variable(df, variable='case_id',n_folds=5, random_state=0):
+    variable_values = df[variable].value_counts().index
+    if random_state:
+        np.random.seed(random_state)
+    out = [] # initialize empty output list, which will be (index, (test, train)) for each of n_folds
+    i = 0
+    for train, test in KFold(len(variable_values), n_folds, random_state=random_state, shuffle=True):
+        out.append((i,
+                (
+                    df.index[df[variable].isin(variable_values[train])],
+                    df.index[df[variable].isin(variable_values[test])]
+                )
+            ))
+        i+=1
+    return(out)
+def all_scoring_metrics_plain(clf, X, y, stratified_kfold):
+    out = []
+    for train, test in stratified_kfold:
+        y_train=y.loc[train]
+        fitted_clf=clf.fit(X.loc[train], y_train)
+        y_pred = fitted_clf.predict(X.loc[test])
+        probs = fitted_clf.predict_proba(X.loc[test])[:,1]
+        y_test=y.loc[test]
+        true_positives = (y_test & y_pred).sum()
+        true_negatives = ((~y_test) & (~y_pred)).sum()
+        false_positives = ((~y_test) & y_pred).sum()
+        false_negatives = (y_test & (~y_pred)).sum()
+        assert((true_positives + true_negatives + false_positives + false_negatives) == y_test.shape[0] ) 
+        f1=(2*true_positives)/float(2*true_positives + false_negatives + false_positives)
+        true_positive_rate= true_positives/float(true_positives + false_negatives)
+        true_negative_rate = (true_negatives/float(true_negatives + false_positives))
+        accuracy = (true_positives + true_negatives)/float(true_positives + true_negatives+false_positives + false_negatives)
+        roc_fpr, roc_tpr, roc_thresholds = roc_curve(y_test, probs)
+        roc_df=pandas.DataFrame({'fpr':roc_fpr, 'tpr':roc_tpr, 'threshold':roc_thresholds})
+        scores=pandas.DataFrame({'probs':probs,'y_test':y_test})
+        scores.sort_values('probs', ascending=False, inplace=True)
+        out_dict = {
+            'true_positive_rate':true_positive_rate,
+            'true_negative_rate':true_negative_rate,
+            'f1':f1,
+            'frac_predicted_true':y_pred.mean(),
+            'frac_predicted_true_in_sample':fitted_clf.predict(X.loc[train]).mean(),
+            'precision':precision_score(y_test, y_pred),
+            'recall':recall_score(y_test, y_pred),
+            'accuracy':accuracy,
+            'roc_auc':roc_auc_score(y_test,fitted_clf.predict_proba(X.loc[test])[:,1]),
+            'fpr_at_90_tpr':roc_fpr[(roc_tpr < .9).sum()],
+            'fpr_at_50_tpr':roc_fpr[(roc_tpr < .5).sum()],
+            'fpr_at_10_tpr':roc_fpr[(roc_tpr < .1).sum()],
+            'precision_at_20':scores[scores['probs'] > 0][0:20]['y_test'].mean(),
+                }
+        for i in np.arange(0,1,0.1):
+            d={
+            'frac_predicted_true%0.1f' % i:(probs > i).mean(),
+            'precision%0.1f' % i:precision_score(y_test, probs > i),
+            'recall%0.1f' % i:recall_score(y_test, probs > i)
+            }
+            out_dict.update(d)
+        out.append(out_dict)
+        out.append(out_dict)
+    return pandas.DataFrame(out)
+def all_scoring_metrics(clf, X, stratified_kfold):
+# Note here y is in the 'class' column of X and we depend on a # classifier pipeline that transforms the X matrix to different # columns which ignore this
+    out = []
+    for index, (train, test) in stratified_kfold:
+        y_train=X.loc[train].groupby(cluster_id)['class'].max().astype('bool')
+        fitted_clf=clf.fit(X.loc[train], y_train)
+        y_pred = fitted_clf.predict(X.loc[test])
+        probs = fitted_clf.predict_proba(X.loc[test])[:,1]
+        y_test=X.loc[test].groupby(cluster_id)['class'].max().astype('bool')
+        true_positives = (y_test & y_pred).sum()
+        true_negatives = ((~y_test) & (~y_pred)).sum()
+        false_positives = ((~y_test) & y_pred).sum()
+        false_negatives = (y_test & (~y_pred)).sum()
+        assert((true_positives + true_negatives + false_positives + false_negatives) == y_test.shape[0] ) 
+        f1=(2*true_positives)/float(2*true_positives + false_negatives + false_positives)
+        true_positive_rate= true_positives/float(true_positives + false_negatives)
+        true_negative_rate = (true_negatives/float(true_negatives + false_positives))
+        accuracy = (true_positives + true_negatives)/float(true_positives + true_negatives+false_positives + false_negatives)
+        roc_fpr, roc_tpr, roc_thresholds = roc_curve(y_test, probs)
+        roc_df=pandas.DataFrame({'fpr':roc_fpr, 'tpr':roc_tpr, 'threshold':roc_thresholds})
+        scores=pandas.DataFrame({'probs':probs,'y_test':y_test})
+        scores.sort_values('probs', ascending=False, inplace=True)
+        out_dict = {
+            'true_positive_rate':true_positive_rate,
+            'true_negative_rate':true_negative_rate,
+            'f1':f1,
+            'frac_predicted_true':y_pred.mean(),
+            'frac_predicted_true_in_sample':fitted_clf.predict(X.loc[train]).mean(),
+            'precision':precision_score(y_test, y_pred),
+            'recall':recall_score(y_test, y_pred),
+            'accuracy':accuracy,
+            'roc_auc':roc_auc_score(y_test,fitted_clf.predict_proba(X.loc[test])[:,1]),
+            'fpr_at_90_tpr':roc_fpr[(roc_tpr < .9).sum()],
+            'fpr_at_50_tpr':roc_fpr[(roc_tpr < .5).sum()],
+            'fpr_at_10_tpr':roc_fpr[(roc_tpr < .1).sum()],
+            'precision_at_20':scores[scores['probs'] > 0][0:20]['y_test'].mean(),
+                }
+        for i in np.arange(0,1,0.1):
+            d={
+            'frac_predicted_true%0.1f' % i:(probs > i).mean(),
+            'precision%0.1f' % i:precision_score(y_test, probs > i),
+            'recall%0.1f' % i:recall_score(y_test, probs > i)
+            }
+            out_dict.update(d)
+        out.append(out_dict)
+    return pandas.DataFrame(out)
+class ItemSelector(BaseEstimator, TransformerMixin):
+    """For data grouped by feature, select subset of data at a provided key.
+
+    The data is expected to be stored in a 2D data structure, where the first
+    index is over features and the second is over samples.  i.e.
+
+    >> len(data[key]) == n_samples
+
+    Please note that this is the opposite convention to scikit-learn feature
+    matrixes (where the first index corresponds to sample).
+
+    ItemSelector only requires that the collection implement getitem
+    (data[key]).  Examples include: a dict of lists, 2D numpy array, Pandas
+    DataFrame, numpy record array, etc.
+
+    >> data = {'a': [1, 5, 2, 5, 2, 8],
+               'b': [9, 4, 1, 4, 1, 3]}
+    >> ds = ItemSelector(key='a')
+    >> data['a'] == ds.transform(data)
+
+    ItemSelector is not designed to handle data grouped by sample.  (e.g. a
+    list of dicts).  If your data is structured this way, consider a
+    transformer along the lines of `sklearn.feature_extraction.DictVectorizer`.
+
+    Parameters
+    ----------
+    key : hashable, required
+        The key corresponding to the desired value in a mappable.
+    """
+    def __init__(self, keylist):
+        self.keylist = keylist
+
+    def fit(self, x, y=None):
+        self._feature_names = x.columns
+        return self
+    def get_feature_names(self):
+        return(self._feature_names)
+
+    def transform(self, data_dict):
+        return data_dict[self.keylist]
+
+class GroupbyMax(BaseEstimator, TransformerMixin):
+    def __init__(self, grouping_column=None, max_column=None):
+        self.grouping_column=grouping_column
+        self.max_column=max_column
+
+    def fit(self, x, y=None):
+        #self._feature_names = x.columns
+        return self
+    def transform(self, data):
+        maxes=data.groupby(self.grouping_column)[self.max_column].max()
+        return(maxes)
+
+class Uniquifier(BaseEstimator, TransformerMixin):
+    def __init__(self, grouping_column=None):
+        self.grouping_column=grouping_column
+
+    def fit(self, x, y=None):
+        #self._feature_names = x.columns
+        return self
+    def transform(self, data):
+        out = data.groupby(self.grouping_column[0]).size()
+        #ipdb.set_trace()
+        return(pandas.DataFrame(out.index))
+
+class Summarizer(BaseEstimator, TransformerMixin):
+    '''
+    initialized with a grouping column where we do a groupb_by max of matches
+
+    Calls to .transform grab only the named column and transform them to dummies
+    '''
+    def __init__(self, grouping_column=None):
+        self.grouping_column=grouping_column
+
+    def fit(self, x, y=None):
+        #self._feature_names = x.columns
+        return self
+    #def get_feature_names(self):
+        #return(self._feature_names)
+
+    def transform(self, data):
+        main_column = [i for i in data.columns if i != self.grouping_column][0]
+        summary_stats=data.groupby(self.grouping_column)[main_column].describe().unstack()
+        del summary_stats['count']
+        summary_stats = summary_stats.rename(columns = {i:'%s__%s' % (main_column, i) for i in summary_stats.columns})
+        summary_stats = summary_stats.fillna(-1)
+        return summary_stats
+
+pipeline = Pipeline([
+
+    # Use FeatureUnion to combine the features from subject and body
+    ('union', FeatureUnion(
+        transformer_list=[
+
+            #('phone_getter', Uniquifier([cluster_id])),
+
+            #('bad_identifier', GroupbyMax([cluster_id],['bad'])),
+
+            # Pipeline for computing price stats
+            ('price', Pipeline([
+                ('price_getter', ItemSelector([cluster_id,'price_imputed'])),
+                ('averager', Summarizer(grouping_column=cluster_id)),
+            ])),
+
+            # Pipeline for computing age stats
+            ('age', Pipeline([
+                ('age_getter', ItemSelector([cluster_id,'age_imputed'])),
+                ('averager', Summarizer(grouping_column=cluster_id)),
+            ])),
+
+
+        ],
+    )),
+
+    ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
+    # Fit a logistic regression with crossvalidation
+])
+model_df['bad'] = model_df['class']==1
+pipeline.fit(model_df, model_df.groupby(cluster_id)['class'].max())
+out =pipeline.transform(model_df)
+X = out[:,2:]
+#y = out[:,1]
+
+text_cols = {x for x in model_df.columns if x.find('text_feature__') > -1}
+price_imputed_cols = {x for x in model_df.columns if x.find('price_imputed__') > -1}
+age_imputed_cols = {x for x in model_df.columns if x.find('age_imputed__') > -1}
+rf = RandomForestClassifier(n_jobs=1, n_estimators=40, random_state=2, oob_score=True)
+num_folds=5
+seed=2
+
+train_df=model_df.copy()
+train_df.index = range(len(train_df))
+train_df=train_df.reindex()
+true_train_index = train_df['class'] == 1
+#test_index = train_df['group'] == 'test'
+false_train_index = train_df['class'] == 0
+train_index = (true_train_index) | (false_train_index)
+
+folds = draw_folds_by_variable(train_df, 'cluster_id', n_folds=num_folds, random_state=seed)
+#folds = StratifiedKFold(train_df['class'], n_folds=num_folds, random_state=seed)
+
+del train_df['group']
+#metrics=all_scoring_metrics(pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], train_df.loc[train_index,['class',cluster_id]].groupby(cluster_id)['class'].max(), folds)
+
+## Do cluster scoring at phone level
+#cluster_id = 'phone_1'
+#phone_metrics=all_scoring_metrics(pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], folds)
+#print(phone_metrics.mean())
+
+# do cluster scoring at cluster level
+cluster_id = 'cluster_id'
+id_metrics=all_scoring_metrics(pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], folds)
+print(id_metrics.mean())
+id_metrics.to_csv('price_age_metrics.csv')
+
+index_to_cdr_id_dict = {index:row['doc_id'] for index, row in train_df.iterrows()}
+def folds_to_csv(folds):
+    out = []
+    for fold in folds:
+        out.append({'fold':fold[0], 'train':[index_to_cdr_id_dict[i] for i in fold[1][0]], 'test':[index_to_cdr_id_dict[i] for i in fold[1][1]]})
+    return(out)
+fold_dict = folds_to_csv(folds)
+open('folds.json','w').write(json.dumps(fold_dict))
+
+text_df = pandas.read_csv('svd_features.csv')   
+text_df=text_df.merge(train_df[['doc_id','cluster_id','class']])
+X=text_df.groupby('cluster_id')[[i for i in text_df.columns if 'text__' in i]].mean()
+X.index=range(len(X))
+X=X.reindex()
+y=text_df.reset_index().groupby('cluster_id')['class'].max().astype('bool')
+y.index=range(len(y))
+rf = RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True)
+cluster_folds = KFold(y.shape[0], n_folds=num_folds, random_state=seed)
+text_metrics=all_scoring_metrics_plain(rf, X, y, cluster_folds)
+text_metrics.to_csv('text_metrics.csv')
