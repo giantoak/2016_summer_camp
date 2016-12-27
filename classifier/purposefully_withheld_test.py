@@ -1,4 +1,5 @@
 import pandas
+import datetime
 import json
 import ipdb
 import cPickle
@@ -13,9 +14,21 @@ from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
+import dateutil
 #model_df = pandas.read_csv('model_fit.csv', index_col='phone_1')
+result_dir='time/'
+def try_parse(date_str):
+    try:
+        return(dateutil.parser.parse(date_str))
+    except:
+        return datetime.datetime(year=1800, month=1, day=1)
 model_df = pandas.read_csv('qpr_imputation.csv', dtype={'phone_1':'str'})
-
+model_df['postdatetime'] = model_df['posttime'].apply(try_parse)
+def draw_nonrandom_folds(df, variable='postdatetime', cutoff=datetime.datetime(year=2015, month=1, day=1)):
+    out = []
+    train = df.index[df[variable] < cutoff]
+    test = df.index[df[variable] >= cutoff]
+    return( [(0, (train, test))])
 cluster_id = 'cluster_id'
 def draw_folds_by_variable(df, variable='case_id',n_folds=5, random_state=0):
     variable_values = df[variable].value_counts().index
@@ -66,7 +79,7 @@ def all_scoring_metrics_plain(clf, X, y, stratified_kfold):
             'fpr_at_90_tpr':roc_fpr[(roc_tpr < .9).sum()],
             'fpr_at_50_tpr':roc_fpr[(roc_tpr < .5).sum()],
             'fpr_at_10_tpr':roc_fpr[(roc_tpr < .1).sum()],
-            'precision_at_20':scores[scores['probs'] > 0][0:20]['y_test'].mean(),
+            'precision_at_20':scores[scores['probs'] > 0].iloc[0:20]['y_test'].mean(),
                 }
         for i in np.arange(0,1,0.1):
             d={
@@ -113,7 +126,53 @@ def all_scoring_metrics(clf, X, stratified_kfold):
             'fpr_at_90_tpr':roc_fpr[(roc_tpr < .9).sum()],
             'fpr_at_50_tpr':roc_fpr[(roc_tpr < .5).sum()],
             'fpr_at_10_tpr':roc_fpr[(roc_tpr < .1).sum()],
-            'precision_at_20':scores[scores['probs'] > 0][0:20]['y_test'].mean(),
+            'precision_at_20':scores[scores['probs'] > 0].iloc[0:20]['y_test'].mean(),
+                }
+        for i in np.arange(0,1,0.1):
+            d={
+            'frac_predicted_true%0.1f' % i:(probs > i).mean(),
+            'precision%0.1f' % i:precision_score(y_test, probs > i),
+            'recall%0.1f' % i:recall_score(y_test, probs > i)
+            }
+            out_dict.update(d)
+        out.append(out_dict)
+    return pandas.DataFrame(out)
+def all_scoring_metrics_date(clf, X, stratified_kfold):
+# Note here y is in the 'class' column of X and we depend on a # classifier pipeline that transforms the X matrix to different # columns which ignore this
+    out = []
+    for index, (train, test) in stratified_kfold:
+        y_train=X.loc[train].groupby(cluster_id)['class'].max().astype('bool')
+        fitted_clf=clf.fit(X.loc[train], y_train)
+        y_pred = fitted_clf.predict(X.loc[test])
+        probs = fitted_clf.predict_proba(X.loc[test])[:,1]
+        y_test=X.loc[test].groupby(cluster_id)['class'].max().astype('bool')
+        true_positives = (y_test & y_pred).sum()
+        true_negatives = ((~y_test) & (~y_pred)).sum()
+        false_positives = ((~y_test) & y_pred).sum()
+        false_negatives = (y_test & (~y_pred)).sum()
+        assert((true_positives + true_negatives + false_positives + false_negatives) == y_test.shape[0] ) 
+        f1=(2*true_positives)/float(2*true_positives + false_negatives + false_positives)
+        true_positive_rate= true_positives/float(true_positives + false_negatives)
+        true_negative_rate = (true_negatives/float(true_negatives + false_positives))
+        accuracy = (true_positives + true_negatives)/float(true_positives + true_negatives+false_positives + false_negatives)
+        roc_fpr, roc_tpr, roc_thresholds = roc_curve(y_test, probs)
+        roc_df=pandas.DataFrame({'fpr':roc_fpr, 'tpr':roc_tpr, 'threshold':roc_thresholds})
+        scores=pandas.DataFrame({'probs':probs,'y_test':y_test})
+        scores.sort_values('probs', ascending=False, inplace=True)
+        out_dict = {
+            'true_positive_rate':true_positive_rate,
+            'true_negative_rate':true_negative_rate,
+            'f1':f1,
+            'frac_predicted_true':y_pred.mean(),
+            'frac_predicted_true_in_sample':fitted_clf.predict(X.loc[train]).mean(),
+            'precision':precision_score(y_test, y_pred),
+            'recall':recall_score(y_test, y_pred),
+            'accuracy':accuracy,
+            'roc_auc':roc_auc_score(y_test,fitted_clf.predict_proba(X.loc[test])[:,1]),
+            'fpr_at_90_tpr':roc_fpr[(roc_tpr < .9).sum()],
+            'fpr_at_50_tpr':roc_fpr[(roc_tpr < .5).sum()],
+            'fpr_at_10_tpr':roc_fpr[(roc_tpr < .1).sum()],
+            'precision_at_20':scores[scores['probs'] > 0].iloc[0:20]['y_test'].mean(),
                 }
         for i in np.arange(0,1,0.1):
             d={
@@ -195,9 +254,11 @@ class Summarizer(BaseEstimator, TransformerMixin):
 
     Calls to .transform grab only the named column and transform them to dummies
     '''
-    def __init__(self, grouping_column=None, return_column = None):
+    def __init__(self, grouping_column=None, return_column = None, return_column_filter=None, calculation_col_filter=None):
         self.grouping_column=grouping_column
         self.return_column = return_column
+        self.return_column_filter = return_column_filter
+        self.calculation_col_filter = calculation_col_filter
 
     def fit(self, x, y=None):
         #self._feature_names = x.columns
@@ -206,11 +267,20 @@ class Summarizer(BaseEstimator, TransformerMixin):
         #return(self._feature_names)
 
     def transform(self, data):
-        main_column = [i for i in data.columns if i != self.grouping_column][0]
+        if self.calculation_col_filter:
+            main_column = [i for i in data.columns if self.calculation_col_filter in i]
+        else:
+            main_column = [i for i in data.columns if i != self.grouping_column]
         summary_stats=data.groupby(self.grouping_column)[main_column].describe().unstack()
-        del summary_stats['count']
-        summary_stats = summary_stats.rename(columns = {i:'%s__%s' % (main_column, i) for i in summary_stats.columns})
+        if self.calculation_col_filter:
+            summary_stats=summary_stats.xs('mean', level=1, axis=1)
+        else:
+            summary_stats = summary_stats.xs(main_column, level=0, axis=1)
+            del summary_stats['count']
+            summary_stats = summary_stats.rename(columns = {i:'%s__%s' % (main_column, i) for i in summary_stats.columns})
         summary_stats = summary_stats.fillna(-1)
+        if self.return_column_filter:
+            return summary_stats[[i for i in summary_stats.columns if self.return_column_filter in i]]
         if self.return_column:
             return summary_stats[['%s__%s' % (main_column, self.return_column)]]
         else:
@@ -245,6 +315,11 @@ pipeline = Pipeline([
     ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
     # Fit a logistic regression with crossvalidation
 ])
+text_svd_mean_pipeline = Pipeline([
+    ('averager', Summarizer(grouping_column=cluster_id, return_column_filter ='text', return_column='mean', calculation_col_filter='text')),
+    ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
+    ])
+
 logistic_pipeline = Pipeline([
 
     # Use FeatureUnion to combine the features from subject and body
@@ -304,14 +379,33 @@ logistic_mean_only_pipeline = Pipeline([
     # Fit a logistic regression with crossvalidation
 ])
 model_df['bad'] = model_df['class']==1
-print('fitting logistic mean only pipeline')
+print('fitting text svd mean only pipeline')
+text_df = pandas.read_csv('svd_features.csv')
+text_df=text_df.merge(model_df[['doc_id','cluster_id','class','postdatetime']])
+text_svd_mean_pipeline.fit(text_df[0:1000],model_df[0:1000].groupby(cluster_id)['class'].max())
+cluster_id = 'cluster_id'
+#print('fitting rf pipeline')
+#pipeline.fit(model_df, model_df.groupby(cluster_id)['class'].max())
+#print('fitting logistic pipeline')
+#logistic_pipeline.fit(model_df, model_df.groupby(cluster_id)['class'].max())
+#out =pipeline.transform(model_df)
+#X = out[:,2:]
+#y = out[:,1]
+
+text_cols = {x for x in model_df.columns if x.find('text_feature__') > -1}
+price_imputed_cols = {x for x in model_df.columns if x.find('price_imputed__') > -1}
+age_imputed_cols = {x for x in model_df.columns if x.find('age_imputed__') > -1}
+rf = RandomForestClassifier(n_jobs=1, n_estimators=40, random_state=2, oob_score=True)
+num_folds=5
+seed=2
+
 logistic_mean_only_pipeline.fit(model_df, model_df.groupby(cluster_id)['class'].max())
-print('fitting rf pipeline')
-pipeline.fit(model_df, model_df.groupby(cluster_id)['class'].max())
-print('fitting logistic pipeline')
-logistic_pipeline.fit(model_df, model_df.groupby(cluster_id)['class'].max())
-out =pipeline.transform(model_df)
-X = out[:,2:]
+#print('fitting rf pipeline')
+#pipeline.fit(model_df, model_df.groupby(cluster_id)['class'].max())
+#print('fitting logistic pipeline')
+#logistic_pipeline.fit(model_df, model_df.groupby(cluster_id)['class'].max())
+#out =pipeline.transform(model_df)
+#X = out[:,2:]
 #y = out[:,1]
 
 text_cols = {x for x in model_df.columns if x.find('text_feature__') > -1}
@@ -329,7 +423,9 @@ true_train_index = train_df['class'] == 1
 false_train_index = train_df['class'] == 0
 train_index = (true_train_index) | (false_train_index)
 
-folds = draw_folds_by_variable(train_df, 'cluster_id', n_folds=num_folds, random_state=seed)
+#folds = draw_folds_by_variable(train_df, 'cluster_id', n_folds=num_folds, random_state=seed)
+time_fold_cutoffs = [datetime.datetime(year=2016, month=1, day=1), datetime.datetime(year=2015, month=7, day=1)]
+folds = [draw_nonrandom_folds(train_df, 'postdatetime', cutoff=i)[0] for i in time_fold_cutoffs]
 #folds = StratifiedKFold(train_df['class'], n_folds=num_folds, random_state=seed)
 
 del train_df['group']
@@ -342,17 +438,36 @@ del train_df['group']
 
 # do cluster scoring at cluster level
 cluster_id = 'cluster_id'
+print('Metrics for text svd  mean only pipeline')
+text_svd_time_metrics=all_scoring_metrics(text_svd_mean_pipeline, text_df, folds)
+text_svd_time_metrics.to_csv(result_dir + 'text_svd_time_metrics.csv')
 print('Metrics for logistic mean only pipeline')
 logistic_mean_only_metrics=all_scoring_metrics(logistic_mean_only_pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], folds)
-logistic_mean_only_metrics.to_csv('logistic_mean_only_metrics.csv')
+logistic_mean_only_metrics.to_csv(result_dir + 'logistic_mean_only_metrics.csv')
 print('Metrics for RF pipeline')
 id_metrics=all_scoring_metrics(pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], folds)
-id_metrics.to_csv('price_age_metrics.csv')
+id_metrics.to_csv(result_dir + 'price_age_metrics.csv')
 print(id_metrics.mean())
 print('Metrics for logistic pipeline')
 logistic_price_metrics=all_scoring_metrics(logistic_pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], folds)
-logistic_price_metrics.to_csv('logistic_price_metrics.csv')
+logistic_price_metrics.to_csv(result_dir + 'logistic_price_metrics.csv')
 
+out = pandas.concat([
+    logistic_mean_only_metrics[['roc_auc']].rename(columns={'roc_auc':'logistic price/age w/ mean only'}),
+    logistic_price_metrics[['roc_auc']].rename(columns={'roc_auc':'logistic price/age all'}),
+    id_metrics[['roc_auc']].rename(columns={'roc_auc':'price/age random forest'}),
+    text_svd_time_metrics[['roc_auc']].rename(columns={'roc_auc':'text svd'})
+    ], axis=1)
+out.to_csv('roc_all.csv')
+out = pandas.concat([
+    logistic_mean_only_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'logistic price/age w/ mean only'}),
+    logistic_price_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'logistic price/age all'}),
+    id_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'price/age random forest'}),
+    text_svd_time_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'text svd'})
+    ], axis=1)
+out.to_csv('fpr_at_50_tpr_all.csv')
+
+ipdb.set_trace()
 index_to_cdr_id_dict = {index:row['doc_id'] for index, row in train_df.iterrows()}
 def folds_to_csv(folds):
     out = []
@@ -360,10 +475,10 @@ def folds_to_csv(folds):
         out.append({'fold':fold[0], 'train':[index_to_cdr_id_dict[i] for i in fold[1][0]], 'test':[index_to_cdr_id_dict[i] for i in fold[1][1]]})
     return(out)
 fold_dict = folds_to_csv(folds)
-open('folds.json','w').write(json.dumps(fold_dict))
+open('time_folds.json','w').write(json.dumps(fold_dict))
 
-text_df = pandas.read_csv('svd_features.csv')   
-text_df=text_df.merge(train_df[['doc_id','cluster_id','class']])
+text_df = pandas.read_csv('svd_features.csv')
+text_df=text_df.merge(train_df[['doc_id','cluster_id','class','postdatetime']])
 X=text_df.groupby('cluster_id')[[i for i in text_df.columns if 'text__' in i]].mean()
 X.index=range(len(X))
 X=X.reindex()
@@ -371,10 +486,12 @@ y=text_df.reset_index().groupby('cluster_id')['class'].max().astype('bool')
 y.index=range(len(y))
 rf = RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True)
 cluster_folds = KFold(y.shape[0], n_folds=num_folds, random_state=seed)
+time_fold_cutoffs = [datetime.datetime(year=2016, month=1, day=1), datetime.datetime(year=2015, month=7, day=1)]
+cluster_folds = [draw_nonrandom_folds(X, 'postdatetime', cutoff=i)[0] for i in time_fold_cutoffs]
 text_metrics=all_scoring_metrics_plain(rf, X, y, cluster_folds)
-text_metrics.to_csv('text_metrics.csv')
+text_metrics.to_csv(result_dir + 'text_metrics.csv')
 
 lm = LogisticRegression()
 logistic_metrics=all_scoring_metrics_plain(lm, X, y, cluster_folds)
-logistic_metrics.to_csv('logistic_metrics.csv')
+logistic_metrics.to_csv(result_dir + 'logistic_metrics.csv')
 

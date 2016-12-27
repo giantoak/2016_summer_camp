@@ -1,10 +1,12 @@
 import ipdb
+import json
 import ujson
 import pandas
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 
 cluster_id = 'cluster_id'
 class ItemSelector(BaseEstimator, TransformerMixin):
@@ -78,8 +80,9 @@ class Summarizer(BaseEstimator, TransformerMixin):
 
     Calls to .transform grab only the named column and transform them to dummies
     '''
-    def __init__(self, grouping_column=None):
+    def __init__(self, grouping_column=None, return_column = None):
         self.grouping_column=grouping_column
+        self.return_column = return_column
 
     def fit(self, x, y=None):
         #self._feature_names = x.columns
@@ -93,7 +96,10 @@ class Summarizer(BaseEstimator, TransformerMixin):
         del summary_stats['count']
         summary_stats = summary_stats.rename(columns = {i:'%s__%s' % (main_column, i) for i in summary_stats.columns})
         summary_stats = summary_stats.fillna(-1)
-        return summary_stats
+        if self.return_column:
+            return summary_stats[['%s__%s' % (main_column, self.return_column)]]
+        else:
+            return summary_stats
 
 pipeline = Pipeline([
 
@@ -124,6 +130,64 @@ pipeline = Pipeline([
     ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
     # Fit a logistic regression with crossvalidation
 ])
+logistic_pipeline = Pipeline([
+
+    # Use FeatureUnion to combine the features from subject and body
+    ('union', FeatureUnion(
+        transformer_list=[
+
+            #('phone_getter', Uniquifier([cluster_id])),
+
+            #('bad_identifier', GroupbyMax([cluster_id],['bad'])),
+
+            # Pipeline for computing price stats
+            ('price', Pipeline([
+                ('price_getter', ItemSelector([cluster_id,'price_imputed'])),
+                ('averager', Summarizer(grouping_column=cluster_id)),
+            ])),
+
+            # Pipeline for computing age stats
+            ('age', Pipeline([
+                ('age_getter', ItemSelector([cluster_id,'age_imputed'])),
+                ('averager', Summarizer(grouping_column=cluster_id)),
+            ])),
+
+
+        ],
+    )),
+
+    ('logistic', LogisticRegression())
+    # Fit a logistic regression with crossvalidation
+])
+logistic_mean_only_pipeline = Pipeline([
+
+    # Use FeatureUnion to combine the features from subject and body
+    ('union', FeatureUnion(
+        transformer_list=[
+
+            #('phone_getter', Uniquifier([cluster_id])),
+
+            #('bad_identifier', GroupbyMax([cluster_id],['bad'])),
+
+            # Pipeline for computing price stats
+            ('price', Pipeline([
+                ('price_getter', ItemSelector([cluster_id,'price_imputed'])),
+                ('averager', Summarizer(grouping_column=cluster_id, return_column='mean')),
+            ])),
+
+            # Pipeline for computing age stats
+            ('age', Pipeline([
+                ('age_getter', ItemSelector([cluster_id,'age_imputed'])),
+                ('averager', Summarizer(grouping_column=cluster_id, return_column='mean')),
+            ])),
+
+
+        ],
+    )),
+
+    ('logistic', LogisticRegression())
+    # Fit a logistic regression with crossvalidation
+])
 
 # Training data
 out_list = []
@@ -140,6 +204,12 @@ with open('data/fall_2016/CP1_train_ads_labelled_fall2016.jsonl') as f:
             if data['extractions'].has_key('phonenumber'):
                 #out['rate_info'] = data['extractions']['rate']
                 out[cluster_id] = data['extractions']['phonenumber']['results'][0]
+            if data['extractions'].has_key('posttime'):
+                out['posttime'] = data['extractions']['posttime']['results'][0]
+            if data['extractions'].has_key('age'):
+                out['age'] = data['extractions']['age']['results'][0]
+            if data['extractions'].has_key('city'):
+                out['city'] = data['extractions']['city']['results'][0]
                 
         out_list.append(out)
         print(count)
@@ -205,7 +275,6 @@ text_rf.fit(X,y)
 text_df.to_csv('svd_features.csv', index=False)
 cPickle.dump(text_pipeline,open('models/svd_transform.pkl','wb'))
 cPickle.dump(text_rf,open('models/svd_text_model.pkl','wb'))
-ipdb.set_trace()
 
 del df['content']
 # Do imputation group-bys
@@ -237,7 +306,8 @@ save_df = model_df.copy()
 #save_df.loc[test_index,'group'] = 'test'
 #save_df.loc[(~test_index) & (~true_train_index),'group'] = 'train_false'
 save_df.to_csv('qpr_model_fit.csv')
-df.to_csv('qpr_imputation.csv', index=False)  
+df.to_csv('qpr_imputation.csv', index=False, encoding='utf-8')  
+ipdb.set_trace()
 
 
 df['bad'] = df['class']
@@ -245,11 +315,19 @@ df['bad'] = df['class']
 #y = pandas.Series(out[:,1]).astype('int')
 cluster_id='cluster_id'
 y=df.groupby(cluster_id).apply(lambda x: (x['class']).max()).astype('int')    
+print('fitting main RF pipeline')
 pipeline.fit(df[df['group'] != 'test'], y)
-#rf = RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True)
-#rf.fit(out, y_)
 probs = pipeline.predict_proba(df[df['group'] != 'test'])
 cPickle.dump(pipeline,open('ht_giantoak_ht_model.pkl','wb'))
+print('fitting logistic pipeline')
+logistic_pipeline.fit(df[df['group'] != 'test'], y)
+logistic_probs = logistic_pipeline.predict_proba(df[df['group'] != 'test'])
+cPickle.dump(pipeline,open('logistic_giantoak_ht_model.pkl','wb'))
+print('fitting logistic mean_only pipeline')
+logistic_mean_only_pipeline.fit(df[df['group'] != 'test'], y)
+logistic_probs = logistic_mean_only_pipeline.predict_proba(df[df['group'] != 'test'])
+cPickle.dump(pipeline,open('logistic_mean_only_giantoak_ht_model.pkl','wb'))
+ipdb.set_trace()
 #from sklearn.feature_extraction.text import TfidfVectorizer
 #from sklearn.decomposition import TruncatedSVD
 #from sklearn.pipeline import Pipeline
@@ -349,6 +427,7 @@ prices= summar_eval_df.groupby('cluster_id')[['price_imputed','age_imputed']].de
 del prices['price_imputed']['count']
 del prices['age_imputed']['count']
 prices.to_csv('summer_price_imputation_features.csv')
+ipdb.set_trace()
 
 summar_eval_svd=text_pipeline.transform(summar_eval_df['content']) 
 svd_df=pandas.DataFrame(summar_eval_svd)
