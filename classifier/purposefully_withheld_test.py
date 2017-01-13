@@ -25,9 +25,17 @@ def try_parse(date_str):
 model_df = pandas.read_csv('qpr_imputation.csv', dtype={'phone_1':'str'})
 model_df['postdatetime'] = model_df['posttime'].apply(try_parse)
 def draw_nonrandom_folds(df, variable='postdatetime', cutoff=datetime.datetime(year=2015, month=1, day=1)):
+    fold_df=df.copy()
+    fold_df['cutoff'] = fold_df[variable] >= cutoff
     out = []
-    train = df.index[df[variable] < cutoff]
-    test = df.index[df[variable] >= cutoff]
+    temp=pandas.DataFrame(fold_df.groupby('cluster_id')['cutoff'].std().fillna(0)).reset_index()
+    temp=temp.rename(columns={'cutoff':'cutoff_cluster_std'})
+    fold_df = fold_df.merge(temp)
+    print('initial df shape: %s' % fold_df.shape[0])
+    fold_df=fold_df[~(fold_df['cutoff_cluster_std'] > 0)]
+    print('filtered df shape: %s' % fold_df.shape[0])
+    train = fold_df.index[fold_df[variable] < cutoff]
+    test = fold_df.index[fold_df[variable] >= cutoff]
     return( [(0, (train, test))])
 cluster_id = 'cluster_id'
 def draw_folds_by_variable(df, variable='case_id',n_folds=5, random_state=0):
@@ -428,6 +436,12 @@ time_fold_cutoffs = [datetime.datetime(year=2016, month=1, day=1), datetime.date
 folds = [draw_nonrandom_folds(train_df, 'postdatetime', cutoff=i)[0] for i in time_fold_cutoffs]
 #folds = StratifiedKFold(train_df['class'], n_folds=num_folds, random_state=seed)
 
+###
+# Insert code to segment on class
+###
+# 1) do a groupby.std of class to see if there's a span
+# 2) turn this into a DF
+# 3) merge the df back in with a patterned name
 del train_df['group']
 #metrics=all_scoring_metrics(pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], train_df.loc[train_index,['class',cluster_id]].groupby(cluster_id)['class'].max(), folds)
 
@@ -458,6 +472,7 @@ out = pandas.concat([
     id_metrics[['roc_auc']].rename(columns={'roc_auc':'price/age random forest'}),
     text_svd_time_metrics[['roc_auc']].rename(columns={'roc_auc':'text svd'})
     ], axis=1)
+out.index = time_fold_cutoffs
 out.to_csv('roc_all.csv')
 out = pandas.concat([
     logistic_mean_only_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'logistic price/age w/ mean only'}),
@@ -465,6 +480,7 @@ out = pandas.concat([
     id_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'price/age random forest'}),
     text_svd_time_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'text svd'})
     ], axis=1)
+out.index = time_fold_cutoffs
 out.to_csv('fpr_at_50_tpr_all.csv')
 
 ipdb.set_trace()
