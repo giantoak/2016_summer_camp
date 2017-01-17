@@ -22,7 +22,15 @@ def try_parse(date_str):
         return(dateutil.parser.parse(date_str))
     except:
         return datetime.datetime(year=1800, month=1, day=1)
+def force_float(age_str):
+    try:
+        return(float(age_str))
+    except:
+        return(np.nan)
 model_df = pandas.read_csv('qpr_imputation.csv', dtype={'phone_1':'str'})
+model_df['age'] = model_df['age'].apply(force_float)
+model_df = model_df[model_df['age'].notnull()]
+
 model_df['postdatetime'] = model_df['posttime'].apply(try_parse)
 def draw_nonrandom_folds(df, variable='postdatetime', cutoff=datetime.datetime(year=2015, month=1, day=1)):
     fold_df=df.copy()
@@ -104,6 +112,7 @@ def all_scoring_metrics(clf, X, stratified_kfold):
     out = []
     for index, (train, test) in stratified_kfold:
         y_train=X.loc[train].groupby(cluster_id)['class'].max().astype('bool')
+        ipdb.set_trace()
         fitted_clf=clf.fit(X.loc[train], y_train)
         y_pred = fitted_clf.predict(X.loc[test])
         probs = fitted_clf.predict_proba(X.loc[test])[:,1]
@@ -294,6 +303,56 @@ class Summarizer(BaseEstimator, TransformerMixin):
         else:
             return summary_stats
 
+extracted_age_rf_pipeline = Pipeline([
+
+    # Use FeatureUnion to combine the features from subject and body
+    ('union', FeatureUnion(
+        transformer_list=[
+
+            #('phone_getter', Uniquifier([cluster_id])),
+
+            #('bad_identifier', GroupbyMax([cluster_id],['bad'])),
+
+            # Pipeline for computing price stats
+
+            # Pipeline for computing age stats
+            ('age', Pipeline([
+                ('age_getter', ItemSelector([cluster_id,'age'])),
+                ('averager', Summarizer(grouping_column=cluster_id)),
+            ])),
+
+
+        ],
+    )),
+
+    ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
+    # Fit a logistic regression with crossvalidation
+])
+imputed_age_rf_pipeline = Pipeline([
+
+    # Use FeatureUnion to combine the features from subject and body
+    ('union', FeatureUnion(
+        transformer_list=[
+
+            #('phone_getter', Uniquifier([cluster_id])),
+
+            #('bad_identifier', GroupbyMax([cluster_id],['bad'])),
+
+            # Pipeline for computing price stats
+
+            # Pipeline for computing age stats
+            ('age', Pipeline([
+                ('age_getter', ItemSelector([cluster_id,'age_imputed'])),
+                ('averager', Summarizer(grouping_column=cluster_id)),
+            ])),
+
+
+        ],
+    )),
+
+    ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
+    # Fit a logistic regression with crossvalidation
+])
 pipeline = Pipeline([
 
     # Use FeatureUnion to combine the features from subject and body
@@ -452,6 +511,29 @@ del train_df['group']
 
 # do cluster scoring at cluster level
 cluster_id = 'cluster_id'
+y_train=train_df.groupby(cluster_id)['class'].max().astype('bool')
+imputed_age_rf_pipeline.fit(train_df[[i for i  in train_df.columns if i not in text_cols]], y_train)
+imputed_probas = imputed_age_rf_pipeline.predict_proba(train_df[[i for i  in train_df.columns if i not in text_cols]])[:,1]
+extracted_age_rf_pipeline.fit(train_df[[i for i  in train_df.columns if i not in text_cols]], y_train)
+extracted_probas = extracted_age_rf_pipeline.predict_proba(train_df[[i for i  in train_df.columns if i not in text_cols]])[:,1]
+analyze_df = pandas.DataFrame(y_train).copy()
+analyze_df['imputed_probas'] = imputed_probas
+analyze_df['extracted_probas'] = extracted_probas
+analyze_df['imputed_class'] = analyze_df['imputed_probas'] > .5
+analyze_df['extracted_class'] = analyze_df['extracted_probas'] > .5
+print((analyze_df['imputed_class'] == analyze_df['extracted_class']).mean())
+print(pandas.crosstab(analyze_df['imputed_class'],analyze_df['extracted_class']))
+print(np.corrcoef(analyze_df[[i for i in analyze_df.columns if 'probas' in i]].T))
+analyze_df.to_csv('age_classification.csv')
+ipdb.set_trace()
+
+
+print('Metrics for extracted age pipeline')
+extracted_age_rf_metrics=all_scoring_metrics(extracted_age_rf_pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], folds)
+extracted_age_rf_metrics.to_csv(result_dir + 'extracted_age_rf_metrics.csv')
+print('Metrics for extracted age pipeline')
+imputed_age_rf_metrics=all_scoring_metrics(imputed_age_rf_pipeline,  train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], folds)
+imputed_age_rf_metrics.to_csv(result_dir + 'imputed_age_rf_metrics.csv')
 print('Metrics for text svd  mean only pipeline')
 text_svd_time_metrics=all_scoring_metrics(text_svd_mean_pipeline, text_df, folds)
 text_svd_time_metrics.to_csv(result_dir + 'text_svd_time_metrics.csv')
@@ -466,18 +548,15 @@ print('Metrics for logistic pipeline')
 logistic_price_metrics=all_scoring_metrics(logistic_pipeline, train_df.loc[train_index,[i for i  in train_df.columns if i not in text_cols]], folds)
 logistic_price_metrics.to_csv(result_dir + 'logistic_price_metrics.csv')
 
-out = pandas.concat([
-    logistic_mean_only_metrics[['roc_auc']].rename(columns={'roc_auc':'logistic price/age w/ mean only'}),
-    logistic_price_metrics[['roc_auc']].rename(columns={'roc_auc':'logistic price/age all'}),
-    id_metrics[['roc_auc']].rename(columns={'roc_auc':'price/age random forest'}),
-    text_svd_time_metrics[['roc_auc']].rename(columns={'roc_auc':'text svd'})
-    ], axis=1)
+out = pandas.concat([ logistic_mean_only_metrics[['roc_auc']].rename(columns={'roc_auc':'logistic price/age w/ mean only'}), logistic_price_metrics[['roc_auc']].rename(columns={'roc_auc':'logistic price/age all'}), id_metrics[['roc_auc']].rename(columns={'roc_auc':'price/age random forest'}), imputed_age_rf_metrics[['roc_auc']].rename(columns={'roc_auc':'imputed age random forest'}), extracted_age_rf_metrics[['roc_auc']].rename(columns={'roc_auc':'extracted age random forest'}), text_svd_time_metrics[['roc_auc']].rename(columns={'roc_auc':'text svd'}) ], axis=1)
 out.index = time_fold_cutoffs
 out.to_csv('roc_all.csv')
 out = pandas.concat([
     logistic_mean_only_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'logistic price/age w/ mean only'}),
     logistic_price_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'logistic price/age all'}),
     id_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'price/age random forest'}),
+    imputed_age_rf_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'imputed age random forest'}),
+    extracted_age_rf_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'extracted age random forest'}),
     text_svd_time_metrics[['fpr_at_50_tpr']].rename(columns={'fpr_at_50_tpr':'text svd'})
     ], axis=1)
 out.index = time_fold_cutoffs

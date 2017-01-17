@@ -1,4 +1,5 @@
 import ipdb
+import numpy as np
 import json
 import ujson
 import pandas
@@ -9,6 +10,11 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 
 cluster_id = 'cluster_id'
+def force_float(age_str):
+    try:
+        return(float(age_str))
+    except:
+        return(np.nan)
 class ItemSelector(BaseEstimator, TransformerMixin):
     """For data grouped by feature, select subset of data at a provided key.
 
@@ -130,6 +136,56 @@ pipeline = Pipeline([
     ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
     # Fit a logistic regression with crossvalidation
 ])
+extracted_age_rf_pipeline = Pipeline([
+
+    # Use FeatureUnion to combine the features from subject and body
+    ('union', FeatureUnion(
+        transformer_list=[
+
+            #('phone_getter', Uniquifier([cluster_id])),
+
+            #('bad_identifier', GroupbyMax([cluster_id],['bad'])),
+
+            # Pipeline for computing price stats
+
+            # Pipeline for computing age stats
+            ('age', Pipeline([
+                ('age_getter', ItemSelector([cluster_id,'age'])),
+                ('averager', Summarizer(grouping_column=cluster_id)),
+            ])),
+
+
+        ],
+    )),
+
+    ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
+    # Fit a logistic regression with crossvalidation
+])
+imputed_age_rf_pipeline = Pipeline([
+
+    # Use FeatureUnion to combine the features from subject and body
+    ('union', FeatureUnion(
+        transformer_list=[
+
+            #('phone_getter', Uniquifier([cluster_id])),
+
+            #('bad_identifier', GroupbyMax([cluster_id],['bad'])),
+
+            # Pipeline for computing price stats
+
+            # Pipeline for computing age stats
+            ('age', Pipeline([
+                ('age_getter', ItemSelector([cluster_id,'age_imputed'])),
+                ('averager', Summarizer(grouping_column=cluster_id)),
+            ])),
+
+
+        ],
+    )),
+
+    ('rf', RandomForestClassifier(n_jobs=-1, n_estimators=40, random_state=2, oob_score=True))
+    # Fit a logistic regression with crossvalidation
+])
 logistic_pipeline = Pipeline([
 
     # Use FeatureUnion to combine the features from subject and body
@@ -217,6 +273,7 @@ with open('data/fall_2016/CP1_train_ads_labelled_fall2016.jsonl') as f:
 
 import pandas
 true_df = pandas.DataFrame(out_list)
+true_df['age'] = true_df['age'].apply(force_float)
 true_df['group'] = 'train'
 true_df.to_csv('true_positives_with_phones_text.csv', index=False, sep='\t', encoding='utf-8')
 del out_list
@@ -315,6 +372,7 @@ df['bad'] = df['class']
 #y = pandas.Series(out[:,1]).astype('int')
 cluster_id='cluster_id'
 y=df.groupby(cluster_id).apply(lambda x: (x['class']).max()).astype('int')    
+y_age=df[(df['group'] != 'test') & (df['age'].notnull())].groupby(cluster_id).apply(lambda x: (x['class']).max()).astype('int')    
 print('fitting main RF pipeline')
 pipeline.fit(df[df['group'] != 'test'], y)
 probs = pipeline.predict_proba(df[df['group'] != 'test'])
@@ -323,6 +381,14 @@ print('fitting logistic pipeline')
 logistic_pipeline.fit(df[df['group'] != 'test'], y)
 logistic_probs = logistic_pipeline.predict_proba(df[df['group'] != 'test'])
 cPickle.dump(pipeline,open('logistic_giantoak_ht_model.pkl','wb'))
+print('fitting age only RF pipeline')
+extracted_age_rf_pipeline.fit(df[(df['group'] != 'test')& (df['age'].notnull())], y_age)
+extracted_age_rf_probs = extracted_age_rf_pipeline.predict_proba(df[(df['group'] != 'test') & (df['age'].notnull())])
+cPickle.dump(pipeline,open('extracted_age_rf_giantoak_ht_model.pkl','wb'))
+print('fitting imputed age only RF pipeline')
+imputed_age_rf_pipeline.fit(df[(df['group'] != 'test')& (df['age'].notnull())], y_age)
+imputed_age_rf_probs = imputed_age_rf_pipeline.predict_proba(df[(df['group'] != 'test') & (df['age'].notnull())])
+cPickle.dump(pipeline,open('imputed_age_rf_giantoak_ht_model.pkl','wb'))
 print('fitting logistic mean_only pipeline')
 logistic_mean_only_pipeline.fit(df[df['group'] != 'test'], y)
 logistic_probs = logistic_mean_only_pipeline.predict_proba(df[df['group'] != 'test'])
